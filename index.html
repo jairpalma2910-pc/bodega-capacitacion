@@ -6,7 +6,7 @@
 <title>Bodega – Acomodo para capacitación</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%;overflow:hidden;background:#1a1b1d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#fff}
+  html,body{margin:0;height:100%;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-text-size-adjust:100%;background:#1a1b1d;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#fff}
   #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
   #c.dragging{cursor:grabbing}
   #top{position:fixed;left:10px;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
@@ -17,6 +17,7 @@
   #tvTag span{background:#ffd23f;color:#1b1b1b;font-weight:800;font-size:13px;padding:6px 10px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.35);white-space:nowrap}
   #tvTag b{color:#ffd23f;font-size:26px;line-height:22px;text-shadow:0 2px 6px rgba(0,0,0,.5);animation:bob 1s ease-in-out infinite}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+  button{touch-action:manipulation}
   #bottom{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;z-index:4}
   #tools{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
   #tools button{background:rgba(18,20,22,.78);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:9px 12px;font-size:14px;font-weight:600;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -581,14 +582,20 @@ canvas.addEventListener('pointerdown',e=>{
 });
 canvas.addEventListener('pointermove',e=>{
   if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(mode==='pinch'&&pointers.size===2){const [a,b]=[...pointers.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(lastPinch){cam.r=Math.min(32,Math.max(1.2,cam.r*lastPinch/d));}lastPinch=d;return;}
+  if(mode==='pinch'&&pointers.size===2){const [a,b]=[...pointers.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);lastPinch=d;return;}
   if(mode==='tv'){setNdc(e);const p=new THREE.Vector3();if(ray.ray.intersectPlane(floorPlane,p)){const nx=p.x-dragOff.x,nz=p.z-dragOff.z;if(!tvBlocked(nx,nz)){state.x=nx;state.z=nz;}else if(!tvBlocked(nx,state.z)){state.x=nx;}else if(!tvBlocked(state.x,nz)){state.z=nz;}
       state.custom=true;placeTV();layoutChairs();updateInfo();}return;}
   if(mode==='orbit'){const dx=e.clientX-last.x,dy=e.clientY-last.y;cam.theta-=dx*.006;cam.phi=Math.min(1.55,Math.max(.08,cam.phi-dy*.005));last={x:e.clientX,y:e.clientY};}
 });
 function endPtr(e){pointers.delete(e.pointerId);if(pointers.size===0){mode=null;canvas.classList.remove('dragging');}else if(mode==='pinch'&&pointers.size===1){mode='orbit';const v=[...pointers.values()][0];last={x:v.x,y:v.y};}}
 canvas.addEventListener('pointerup',endPtr);canvas.addEventListener('pointercancel',endPtr);
-canvas.addEventListener('wheel',e=>{e.preventDefault();anim=null;cam.r=Math.min(32,Math.max(1.2,cam.r*(1+Math.sign(e.deltaY)*.1)));},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();},{passive:false});
+// bloquear zoom del navegador (pellizco, doble toque, ctrl+rueda)
+['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>e.preventDefault(),{passive:false}));
+document.addEventListener('touchmove',e=>{if(e.touches.length>1||(e.scale&&e.scale!==1))e.preventDefault();},{passive:false});
+let lastTouchEnd=0;document.addEventListener('touchend',e=>{const n=Date.now();if(n-lastTouchEnd<350)e.preventDefault();lastTouchEnd=n;},{passive:false});
+window.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();},{passive:false});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&['+','-','=','0'].includes(e.key))e.preventDefault();});
 
 document.getElementById('btnLayout').onclick=()=>{applyPreset((state.preset+1)%PRESETS.length);goView(state.view);};
 document.getElementById('btnView').onclick=()=>goView((state.view+1)%VIEWS.length);
