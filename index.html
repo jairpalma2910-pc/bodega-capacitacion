@@ -76,6 +76,7 @@
     <button data-c="+row">+ fila</button>
     <button data-c="-5">− 5</button>
     <button data-c="+5">+ 5</button>
+    <button data-c="perrow" id="perRowBtn">Por fila: 9</button>
     <button data-c="style" id="styleBtn">Tipo: Mezcladas</button>
   </div>
   <div id="tablePanel" class="panel">
@@ -763,10 +764,10 @@ const PRESETS=[
   {name:'Tele volteada',desc:'Tele viendo hacia el fondo (camioneta)',x:4,z:9.0,a:0},
   {name:'Tele en la pared de SALIDA',desc:'Pegada a la pared de la puerta de salida',x:4.7,z:.8,a:0},
   {name:'Tele viendo a la cortina verde',desc:'Tele junto a la oficina, sillas hacia la cortina',x:7.25,z:3.0,a:-Math.PI/2},
-  {name:'Sillas viendo a la cortina (como la foto)',desc:'Tele junto a la cortina, sillas viendo hacia ella',x:.9,z:7.0,a:Math.PI/2},
+  {name:'Sillas viendo a la cortina (como la foto)',desc:'Tele junto a la cortina, sillas viendo hacia ella',x:.9,z:7.0,a:Math.PI/2,cam0:[[7.3,3.0,13.2],[3.0,.5,6.6]]},
 ];
-let nChairs=30;const MAXC=60;
-function colsFor(n){return 6;}
+let nChairs=45;const MAXC=99;let perRow=9;const PER_ROW_OPTS=[9,6,8,10,12];
+function colsFor(n){return perRow;}
 function rowsFor(n){return n<=0?0:Math.ceil(n/colsFor(n));}
 const state={preset:0,view:0,x:0,z:0,a:0,custom:false};
 
@@ -791,15 +792,18 @@ function layoutChairs(){
   while(chairGroup.children.length)chairGroup.remove(chairGroup.children[0]);
   const cols=colsFor(nChairs),rows=rowsFor(nChairs);
   const F=new THREE.Vector3(Math.sin(state.a),0,Math.cos(state.a)),S=new THREE.Vector3(Math.cos(state.a),0,-Math.sin(state.a));
-  const offs=[];const half=cols/2;for(let i=0;i<cols;i++){const k=i<half?-(half-i):(i-half+1);offs.push(Math.sign(k)*(.3+.6*(Math.abs(k)-1)+.35));}
+  const offs=[];const aisle=cols%2===0&&cols!==9;const half=cols/2;
+  if(aisle){for(let i=0;i<cols;i++){const k=i<half?-(half-i):(i-half+1);offs.push(Math.sign(k)*(.3+.56*(Math.abs(k)-1)+.35));}}
+  else{for(let i=0;i<cols;i++)offs.push((i-(cols-1)/2)*.56);}
   let placed=0;
   const byCenter=offs.slice().sort((a,b)=>Math.abs(a)-Math.abs(b)||a-b);
-  for(let r=0;r<rows;r++){const d=2.5+r*1.0;const left=nChairs-r*cols;
+  for(let r=0;r<rows;r++){const d=2.5+r*.9;const left=nChairs-r*cols;
     const rowOffs=left>=cols?offs:byCenter.slice(0,left);
     for(const o of rowOffs){const x=state.x+F.x*d+S.x*o,z=state.z+F.z*d+S.z*o;
       if(blocked(x,z))continue;
       const hsh=Math.abs(Math.sin(r*12.9898+o*78.233)*43758.5453)%1;
-      const white=chairStyle==='blanca'||(chairStyle==='mix'&&((o<-1.0)||hsh<.18));
+      const ci=offs.indexOf(o);
+      const white=chairStyle==='blanca'||(chairStyle==='mix'&&(cols===9?ci>=5:((o<-1.0)||hsh<.18)));
       const c=makeChair(white);c.position.set(x,0,z);c.rotation.y=Math.atan2(-F.x,-F.z);
       c.rotation.y+= (Math.sin(x*12.9+z*78.2)*.04); // pequeño desorden natural
       chairGroup.add(c);placed++;}}
@@ -848,7 +852,12 @@ function viewPose(v){
     return {P,G};}
   overview(false);v-=3;
   switch(v){
-    case 0:{let d=2.5+rows+2.6;const ok=(dd)=>{const q=T.clone().addScaledVector(F,dd);return freeCircle(q.x,q.z,.4)&&!(q.x>OFF.x0-.3&&q.x<OFF.x1+.3&&q.z<OFF.z1+.3);};while(d>2.5+rows*.6&&!ok(d))d-=.2;P=T.clone().addScaledVector(F,d);P.y=d<2.5+rows+1?2.9:2.1;G=T.clone();G.y=1.0;break;}
+    case 0:{const pr=PRESETS[state.preset];if(pr.cam0&&!state.custom){P=new THREE.Vector3(...pr.cam0[0]);G=new THREE.Vector3(...pr.cam0[1]);break;}
+      const depth=2.5+(rows-1)*.9;const free=(q)=>freeCircle(q.x,q.z,.4)&&!(q.x>OFF.x0-.3&&q.x<OFF.x1+.3&&q.z<OFF.z1+.3);
+      let d=depth+3.2;while(d>depth+1.2&&!free(T.clone().addScaledVector(F,d)))d-=.2;
+      if(free(T.clone().addScaledVector(F,d))){P=T.clone().addScaledVector(F,d);P.y=d<depth+2.2?2.8:2.2;G=T.clone();G.y=1.0;break;}
+      let best=null;for(const sd of [1,-1]){if(best)continue;for(let w=perRow*.28+3.5;w>perRow*.28+1;w-=.25){const q=T.clone().addScaledVector(F,depth+.6).addScaledVector(S,sd*w);if(free(q)){best=q;break;}}}
+      P=best||T.clone().addScaledVector(F,depth);P.y=3.0;G=T.clone().addScaledVector(F,1.6);G.y=.9;break;}
     case 1:P=T.clone().addScaledVector(F,-1.7).addScaledVector(S,1.0);P.y=2.05;G=C.clone();G.y=.4;break;
     case 2:P=C.clone().addScaledVector(F,-.8);P.y=13.5;G=C.clone().addScaledVector(F,-.8);G.y=0;P.addScaledVector(F,3.2);break;
     case 3:P=C.clone().addScaledVector(S,6).addScaledVector(F,4.5);P.y=4.6;G=T.clone().lerp(C,.55);G.y=.6;break;
@@ -867,7 +876,7 @@ function poseFromCam(){const s=Math.sin(cam.phi);const P=new THREE.Vector3(cam.t
 let anim=null;
 function goView(v,instant){state.view=v;document.getElementById('viewSmall').textContent=`${v+1} de ${VIEWS.length} · ${VIEWS[v]}`;
   const {P,G}=viewPose(v);
-  if(instant){camera.position.copy(P);camera.lookAt(G);setFromPose(P,G);return;}
+  if(instant){anim=null;camera.position.copy(P);camera.lookAt(G);setFromPose(P,G);return;}
   anim={t:0,P0:camera.position.clone(),G0:cam.target.clone(),P1:P,G1:G};}
 
 // ---------- Interacción ----------
@@ -953,10 +962,11 @@ document.querySelectorAll('#tablePanel button').forEach(b=>b.onclick=()=>{const 
   document.querySelectorAll('.mtag.tbl').forEach(el=>{if(!movables.some(m=>m.tag===el))el.remove();});});
 document.querySelectorAll('#chairPanel button').forEach(b=>b.onclick=()=>{
   const c=b.dataset.c,cols=colsFor(Math.max(nChairs,1));
-  if(c==='none')nChairs=0;else if(c==='one')nChairs=6;
+  if(c==='none')nChairs=0;else if(c==='one')nChairs=perRow;
   else if(c==='+row')nChairs=Math.min(MAXC,(rowsFor(nChairs)+1)*colsFor(nChairs+6));
   else if(c==='-row')nChairs=Math.max(0,(rowsFor(nChairs)-1)*cols);
   else if(c==='+5')nChairs=Math.min(MAXC,nChairs+5);else if(c==='-5')nChairs=Math.max(0,nChairs-5);
+  else if(c==='perrow'){const rws=Math.max(1,rowsFor(nChairs));perRow=PER_ROW_OPTS[(PER_ROW_OPTS.indexOf(perRow)+1)%PER_ROW_OPTS.length];nChairs=Math.min(MAXC,rws*perRow);document.getElementById('perRowBtn').textContent='Por fila: '+perRow;layoutChairs();updateInfo();toast(`🪑 ${perRow} sillas por fila`);return;}
   else if(c==='style'){const k=['mix','lifetime','blanca'];chairStyle=k[(k.indexOf(chairStyle)+1)%3];document.getElementById('styleBtn').textContent='Tipo: '+STYLE_NAMES[chairStyle];layoutChairs();toast('🪑 Sillas: '+STYLE_NAMES[chairStyle]);return;}
   layoutChairs();updateInfo();toast(nChairs?`🪑 ${nChairs} sillas`:'Sin sillas');});
 
@@ -965,7 +975,7 @@ function summary(){
   return `Acomodo: ${state.custom?'Personalizado (basado en "'+PRESETS[state.preset].name+'")':PRESETS[state.preset].name}\n`+
   `• Tele a ${state.x.toFixed(1)} m de la cortina verde\n• Tele a ${state.z.toFixed(1)} m de la pared de SALIDA\n`+
   `• Pantalla viendo hacia ${dirName(state.a)}\n• Sillas: ${nChairs?nChairs+(state.placed<nChairs?' (caben '+state.placed+')':''):'sin sillas'}\n`+
-  `• Tipo de sillas: ${STYLE_NAMES[chairStyle]}\n• Mesas: ${tables().length||'ninguna'}\n`+
+  `• Filas de ${perRow} sillas\n• Tipo de sillas: ${STYLE_NAMES[chairStyle]}\n• Mesas: ${tables().length||'ninguna'}\n`+
   `• Camioneta a ${Math.max(0,suvMov.x).toFixed(1)} m de la cortina y ${suvMov.z.toFixed(1)} m de la SALIDA`;
 }
 const toast=(t)=>{const el=document.getElementById('toast');el.textContent=t;el.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>el.style.opacity=0,1600);};
